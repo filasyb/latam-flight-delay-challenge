@@ -1,0 +1,6 @@
+[run]
+source = challenge
+
+[report]
+show_missing = True
+skip_empty = True

@@ -10,7 +10,6 @@ env/
 
 # Test and coverage reports
 .coverage
-.coveragerc
 .coverage.*
 .pytest_cache/
 htmlcov/
