@@ -201,3 +201,123 @@ Official commands:
 make model-test
 make api-test
 ```
+
+## Part III - Deployment
+
+The API was deployed manually to Google Cloud Run from an authenticated local
+Google Cloud SDK session.
+
+I intentionally avoided storing cloud credentials in GitHub Actions because this
+repository is public. The deployment process uses local `gcloud` authentication
+instead of repository secrets. This reduces the risk of exposing or misusing
+cloud credentials through a public CI/CD environment.
+
+The service is containerized with the project `Dockerfile`. The container:
+
+- Uses Python 3.10, matching the dependency constraints used by the challenge.
+- Installs runtime dependencies from `requirements.txt`.
+- Copies only the application package and dataset required at runtime.
+- Runs `uvicorn` with `challenge.api:app`.
+- Reads the runtime port from Cloud Run's `PORT` environment variable, falling
+  back to `8080` for local Docker execution.
+
+The deployment was performed with a Docker image rather than Google Buildpacks.
+This was necessary because Buildpacks tried to infer a Python entrypoint and
+selected a newer Python runtime, while the challenge dependency set is aligned
+with Python 3.10.
+
+Manual deployment flow:
+
+```bash
+gcloud builds submit --tag gcr.io/<PROJECT_ID>/latam-flight-delay-api
+
+gcloud run deploy latam-flight-delay-api \
+  --image gcr.io/<PROJECT_ID>/latam-flight-delay-api \
+  --region us-central1 \
+  --platform managed \
+  --allow-unauthenticated
+```
+
+The deployed API URL is not hardcoded in the repository documentation. For local
+stress testing, it is passed through the `STRESS_URL` environment variable:
+
+```bash
+STRESS_URL=<DEPLOYED_API_URL> make stress-test
+```
+
+In PowerShell:
+
+```powershell
+$env:STRESS_URL="<DEPLOYED_API_URL>"
+make stress-test
+```
+
+The `Makefile` keeps a local default:
+
+```makefile
+STRESS_URL ?= http://0.0.0.0:8080
+```
+
+This keeps the public API URL out of source control while still allowing the
+challenge reviewer to receive the deployed URL in the final submission payload.
+
+### Stress Test Result
+
+The official stress test was executed against the deployed Cloud Run service:
+
+```bash
+make stress-test
+```
+
+Result summary:
+
+| Metric | Value |
+| --- | ---: |
+| Endpoint | `POST /predict` |
+| Total requests | 4515 |
+| Failures | 0 |
+| Failure rate | 0.00% |
+| Average response time | 388 ms |
+| Median response time | 370 ms |
+| Max response time | 1350 ms |
+| Throughput | 75.75 req/s |
+
+The stress report is generated locally at:
+
+```text
+reports/stress-test.html
+```
+
+## Part IV - CI/CD
+
+The repository includes GitHub Actions workflows under `.github/workflows`.
+
+### Continuous Integration
+
+`ci.yml` runs on pushes to `main`, `develop`, and `feature/**`, and on pull
+requests targeting `main` or `develop`.
+
+The CI job:
+
+- Checks out the repository.
+- Sets up Python 3.10.
+- Installs development, test, and runtime dependencies.
+- Runs `make model-test`.
+- Runs `make api-test`.
+
+The stress test is intentionally not part of CI because it depends on a deployed
+public service and can be affected by network conditions, Cloud Run cold starts,
+quotas, or external latency. It is run manually after deployment.
+
+### Continuous Delivery
+
+`cd.yml` validates the Docker build on `main` and can also be triggered manually.
+
+The workflow does not deploy to Google Cloud automatically. This is intentional:
+because the repository is public, cloud deployment credentials are not stored in
+GitHub Secrets. The workflow verifies that the container can be built, while the
+actual deployment is performed manually from a trusted local machine using
+Google Cloud SDK.
+
+This setup provides automated validation of the code and container while keeping
+cloud credentials outside the public repository.
