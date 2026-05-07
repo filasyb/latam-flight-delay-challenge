@@ -1,0 +1,24 @@
+name: Continuous Delivery
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t latam-flight-delay-api .
+
+      - name: Document deployment strategy
+        run: |
+          echo "Docker image build succeeded."
+          echo "Deployment is performed manually from an authenticated Google Cloud SDK session."
+          echo "No cloud credentials are stored in GitHub Actions for this public repository."
